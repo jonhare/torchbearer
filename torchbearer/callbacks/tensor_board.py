@@ -5,7 +5,6 @@ import torch
 import torch.nn.functional as F
 import torchvision.utils as utils
 from tensorboardX import SummaryWriter
-from tensorboardX.torchvis import VisdomWriter
 
 import torchbearer
 from torchbearer.callbacks import Callback
@@ -16,7 +15,7 @@ __writers__ = dict()
 
 class VisdomParams:
     """
-    Class to hold visdom client arguments. Modify member variables before initialising tensorboard callbacks for custom arguments.
+    Class to hold visdom client arguments. Modify member variables before initialising tensorboard callbacks for custom arguments. See: `visdom <https://github.com/facebookresearch/visdom#visdom-arguments-python-only>`_
     """
     SERVER = 'http://localhost'
     ENDPOINT = 'events'
@@ -51,6 +50,7 @@ def get_writer(log_dir, logger, visdom=False):
 
     if log_dir not in __writers__ or writer_key not in __writers__[log_dir]:
         if visdom:
+            from tensorboardX.torchvis import VisdomWriter
             w = VisdomWriter()
             try:
                 from visdom import Visdom

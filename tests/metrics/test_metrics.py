@@ -1,13 +1,33 @@
 import unittest
 from unittest.mock import Mock
 
-from torchbearer.metrics import MetricFactory, MetricList, Metric, MetricTree, AdvancedMetric
+import torch
+
+import torchbearer
+from torchbearer.metrics import MetricList, Metric, MetricTree, AdvancedMetric
+from torchbearer.metrics.primitives import CategoricalAccuracy
 
 
-class TestMetricFactory(unittest.TestCase):
-    def test_empty_build(self):
-        factory = MetricFactory()
-        self.assertTrue(factory.build() is None)
+class TestMetric(unittest.TestCase):
+    def setUp(self):
+        self._state = {
+            torchbearer.Y_TRUE: torch.LongTensor([0, 1, 2, 2, 1]),
+            torchbearer.Y_PRED: torch.FloatTensor([
+                [0.9, 0.1, 0.1], # Correct
+                [0.1, 0.9, 0.1], # Correct
+                [0.1, 0.1, 0.9], # Correct
+                [0.9, 0.1, 0.1], # Incorrect
+                [0.9, 0.1, 0.1], # Incorrect
+            ])
+        }
+        self._state[torchbearer.Y_PRED].requires_grad = True
+        self._targets = [1, 1, 1, 0, 0]
+        self._metric = CategoricalAccuracy().root
+
+    def test_requires_grad(self):
+        result = self._metric.process(self._state)
+        self.assertTrue(self._state[torchbearer.Y_PRED].requires_grad is True)
+        self.assertTrue(result.requires_grad is False)
 
 
 class TestMetricTree(unittest.TestCase):
@@ -57,8 +77,9 @@ class TestMetricTree(unittest.TestCase):
         tree.add_child(leaf)
 
         tree.train()
-        root.train.assert_called_once()
-        leaf.train.assert_called_once()
+
+        self.assertEqual(root.train.call_count, 1)
+        self.assertEqual(leaf.train.call_count, 1)
 
     def test_eval(self):
         root = Metric('test')
@@ -70,8 +91,9 @@ class TestMetricTree(unittest.TestCase):
         tree.add_child(leaf)
 
         tree.eval()
-        root.eval.assert_called_once()
-        leaf.eval.assert_called_once()
+
+        self.assertEqual(root.eval.call_count, 1)
+        self.assertEqual(leaf.eval.call_count, 1)
 
     def test_reset(self):
         root = Metric('test')
@@ -126,14 +148,14 @@ class TestMetricList(unittest.TestCase):
         my_mock.train = Mock(return_value=None)
         metric = MetricList([my_mock])
         metric.train()
-        my_mock.train.assert_called_once()
+        self.assertEqual(my_mock.train.call_count, 1)
 
     def test_eval(self):
         my_mock = Metric('test')
         my_mock.eval = Mock(return_value=None)
         metric = MetricList([my_mock])
         metric.eval()
-        my_mock.eval.assert_called_once()
+        self.assertEqual(my_mock.eval.call_count, 1)
 
     def test_reset(self):
         my_mock = Metric('test')

@@ -6,11 +6,38 @@ of :class:`Metric` or :class:`MetricFactory`. These can then be collected in a :
 running metrics and statistics, without needing to compute the underlying values more than once. Typically,
 constructions of this kind should be handled using the :mod:`decorator API <.metrics.decorators>`.
 """
+from distutils.version import LooseVersion
+import functools
 
-import abc
+import inspect
+import torch
 
-# The global dict of default metrics which maps keys to metrics in the :class:`MetricList`.
-DEFAULT_METRICS = {}
+__defaults__ = {}
+
+
+def add_default(key, metric):
+    __defaults__[key] = metric
+
+
+def get_default(key):
+    metric = __defaults__[key]
+    if inspect.isclass(metric):
+        metric = metric()
+    return metric
+
+
+def no_grad():
+    version = torch.__version__ if str(torch.__version__) is torch.__version__ else "0.4.1"
+    if LooseVersion(version) < LooseVersion("0.4.1"):  # No grad isn't a decorator
+        def decorator(func):
+            @functools.wraps(func)
+            def wrap_no_grad(*args, **kwargs):
+                with torch.no_grad():
+                    return func(*args, **kwargs)
+            return wrap_no_grad
+        return decorator
+    else:
+        return torch.no_grad()
 
 
 class Metric(object):
@@ -30,6 +57,7 @@ class Metric(object):
     def __init__(self, name):
         self.name = name
 
+    @no_grad()
     def process(self, *args):
         """Process the state and update the metric for one iteration.
 
@@ -39,6 +67,7 @@ class Metric(object):
         """
         pass
 
+    @no_grad()
     def process_final(self, *args):
         """Process the terminal state and output the final value of the metric.
 
@@ -65,20 +94,6 @@ class Metric(object):
 
         """
         pass
-
-
-class MetricFactory(object):
-    """A simple implementation of a factory pattern. Used to enable construction of complex metrics using decorators.
-    """
-    __metaclass__ = abc.ABCMeta
-
-    @abc.abstractmethod
-    def build(self):
-        """Build and return a usable :class:`Metric` instance.
-
-        :return: The constructed :class:`Metric`
-        """
-        ...
 
 
 class MetricTree(Metric):
@@ -163,10 +178,7 @@ class MetricList(Metric):
         for metric in metric_list:
 
             if str(metric) == metric:
-                metric = DEFAULT_METRICS[metric]
-
-            if isinstance(metric, MetricFactory):
-                metric = metric.build()
+                metric = get_default(metric)
 
             if isinstance(metric, MetricList):
                 self.metric_list = self.metric_list + metric.metric_list

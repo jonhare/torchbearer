@@ -24,7 +24,7 @@ class TestCheckpointer(TestCase):
         file_format = 'test_file.pt'
         check = _Checkpointer(file_format)
         check.save_checkpoint(state)
-        mock_save.assert_called_once()
+        self.assertEqual(mock_save.call_count, 1)
 
         self.assertTrue(mock_save.call_args[0][1] == 'test_file.pt')
 
@@ -41,7 +41,7 @@ class TestCheckpointer(TestCase):
         file_format = 'test_file_{epoch}.pt'
         check = _Checkpointer(file_format)
         check.save_checkpoint(state)
-        mock_save.assert_called_once()
+        self.assertEqual(mock_save.call_count, 1)
 
         self.assertTrue(mock_save.call_args[0][1] == 'test_file_2.pt')
 
@@ -58,7 +58,7 @@ class TestCheckpointer(TestCase):
         file_format = 'test_file_{test_metric}.pt'
         check = _Checkpointer(file_format)
         check.save_checkpoint(state)
-        mock_save.assert_called_once()
+        self.assertEqual(mock_save.call_count, 1)
 
         self.assertTrue(mock_save.call_args[0][1] == 'test_file_0.001.pt')
 
@@ -75,7 +75,7 @@ class TestCheckpointer(TestCase):
         file_format = 'test_file_{test_metric:.01f}.pt'
         check = _Checkpointer(file_format)
         check.save_checkpoint(state)
-        mock_save.assert_called_once()
+        self.assertEqual(mock_save.call_count, 1)
 
         self.assertTrue(mock_save.call_args[0][1] == 'test_file_0.0.pt')
 
@@ -117,6 +117,17 @@ class TestCheckpointer(TestCase):
         state[torchbearer.EPOCH] = 1
         check.save_checkpoint(state, True)
         self.assertTrue(check.most_recent == 'test_file_1.pt')
+
+    @patch("torch.save")
+    def test_state_dict(self, _):
+        check = _Checkpointer('test')
+        check.most_recent = 'temp'
+
+        state = check.state_dict()
+
+        check = _Checkpointer('test')
+        check.load_state_dict(state)
+        self.assertEqual(check.most_recent, 'temp')
 
 
 class TestModelCheckpoint(TestCase):
@@ -166,6 +177,19 @@ class TestInterval(TestCase):
                 self.assertTrue(mock_save_check.call_count == 2)
 
         self.assertTrue(mock_save_check.call_count == 3)
+
+    def test_state_dict(self):
+        check = Interval('test')
+        check.most_recent = 'temp'
+        check.epochs_since_last_save = 10
+
+        state = check.state_dict()
+
+        check = Interval('test')
+        check.load_state_dict(state)
+
+        self.assertEqual(check.most_recent, 'temp')
+        self.assertEqual(check.epochs_since_last_save, 10)
 
 
 class TestBest(TestCase):
@@ -280,3 +304,18 @@ class TestBest(TestCase):
 
         check.on_end_epoch(state)
         self.assertTrue(check.mode == 'max')
+
+    def test_state_dict(self):
+        check = Best('test')
+        check.most_recent = 'temp'
+        check.best = 'temp2'
+        check.epochs_since_last_save = 10
+
+        state = check.state_dict()
+
+        check = Best('test')
+        check.load_state_dict(state)
+
+        self.assertEqual(check.most_recent, 'temp')
+        self.assertEqual(check.best, 'temp2')
+        self.assertEqual(check.epochs_since_last_save, 10)

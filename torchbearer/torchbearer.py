@@ -11,7 +11,11 @@ from torchbearer.callbacks.printer import Tqdm
 
 
 class Model:
-    """ Create torchbearermodel which wraps a base torchmodel and provides a training environment surrounding it
+    """
+    .. deprecated:: 0.2.0
+        Use :class:`.Trial` instead.
+
+    Create torchbearermodel which wraps a base torchmodel and provides a training environment surrounding it
 
     :param model: The base pytorch model
     :type model: torch.nn.Module
@@ -24,6 +28,12 @@ class Model:
     """
     def __init__(self, model, optimizer, criterion=None, metrics=[]):
         super().__init__()
+        warnings.warn(
+            'torchbearer.Model and all of its attributes are deprecated as of version 0.2.0. Use torchbearer.Trial instead',
+            DeprecationWarning)
+        warnings.warn(
+            'torchbearer.Model and all of its attributes are deprecated as of version 0.2.0. Use torchbearer.Trial instead',
+            UserWarning)
         if criterion is None:
             criterion = lambda y_pred, y_true: torch.zeros(1, device=y_true.device)
 
@@ -137,6 +147,7 @@ class Model:
         state = {
             torchbearer.MAX_EPOCHS: epochs,
             torchbearer.TRAIN_STEPS: train_steps,
+            torchbearer.STEPS: train_steps,
             torchbearer.BATCH: 0,
             torchbearer.GENERATOR: generator,
             torchbearer.STOP_TRAINING: False
@@ -151,7 +162,9 @@ class Model:
             state[torchbearer.CALLBACK_LIST].on_start_epoch(state)
 
             if state[torchbearer.GENERATOR] is not None:
+                state[torchbearer.TRAIN_GENERATOR] = state[torchbearer.GENERATOR]
                 state[torchbearer.TRAIN_ITERATOR] = iter(state[torchbearer.GENERATOR])
+                state[torchbearer.ITERATOR] = state[torchbearer.TRAIN_ITERATOR]
             self.train()
 
             state[torchbearer.CALLBACK_LIST].on_start_training(state)
@@ -202,7 +215,9 @@ class Model:
             # Validate
             if validation_generator is not None or validation_steps is not None:
                 state[torchbearer.VALIDATION_GENERATOR] = validation_generator
+                state[torchbearer.GENERATOR] = validation_generator
                 state[torchbearer.VALIDATION_STEPS] = validation_steps
+                state[torchbearer.STEPS] = validation_steps
                 self.eval()
                 self._validate(state, state[torchbearer.CALLBACK_LIST], pass_state)
 
@@ -245,8 +260,10 @@ class Model:
                 warnings.warn('Num test steps is not an int, converting to int.', Warning)
 
             state[torchbearer.VALIDATION_STEPS] = num_steps
+            state[torchbearer.STEPS] = num_steps
             if state[torchbearer.VALIDATION_GENERATOR] is not None:
                 state[torchbearer.VALIDATION_ITERATOR] = iter(state[torchbearer.VALIDATION_GENERATOR])
+                state[torchbearer.ITERATOR] = state[torchbearer.VALIDATION_ITERATOR]
 
             state[torchbearer.CALLBACK_LIST].on_start_validation(state)
 
@@ -555,10 +572,10 @@ class Model:
         :rtype: dict[str,any]
         """
         for key, _ in kwargs.items():
-            if key == torchbearer.DATA_TYPE:
-                main_state[torchbearer.DATA_TYPE] = kwargs[torchbearer.DATA_TYPE]
-            elif torchbearer.DEVICE in kwargs:
-                main_state[torchbearer.DEVICE] = kwargs[torchbearer.DEVICE]
+            if key == 'device':
+                main_state[torchbearer.DATA_TYPE] = kwargs['dtype']
+            elif 'device' in kwargs:
+                main_state[torchbearer.DEVICE] = kwargs['device']
 
         for arg in args:
             if isinstance(arg, torch.dtype):

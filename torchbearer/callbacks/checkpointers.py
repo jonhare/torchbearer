@@ -19,12 +19,21 @@ class _Checkpointer(Callback):
         if fileformat.__contains__(os.sep) and not os.path.exists(os.path.dirname(fileformat)):
             os.makedirs(os.path.dirname(fileformat))
 
+    def state_dict(self):
+        return {'most_recent': self.most_recent}
+
+    def load_state_dict(self, state_dict):
+        self.most_recent = state_dict['most_recent']
+
+        return self
+
     def save_checkpoint(self, model_state, overwrite_most_recent=False):
         state = {}
         state.update(model_state)
         state.update(model_state[torchbearer.METRICS])
 
-        filepath = self.fileformat.format(**state)
+        string_state = {str(key): state[key] for key in state.keys()}
+        filepath = self.fileformat.format(**string_state)
 
         if self.most_recent is not None and overwrite_most_recent:
             os.remove(self.most_recent)
@@ -82,7 +91,7 @@ class MostRecent(_Checkpointer):
         self.filepath = filepath
 
     def on_end_epoch(self, state):
-        super().on_end_training(state)
+        super().on_end_epoch(state)
         self.save_checkpoint(state, overwrite_most_recent=True)
 
 
@@ -127,20 +136,37 @@ class Best(_Checkpointer):
             self.min_delta *= 1
             self.monitor_op = lambda x1, x2: (x1-self.min_delta) > x2
 
+        self.best = None
+
+    def state_dict(self):
+        state_dict = super().state_dict()
+        state_dict['epochs'] = self.epochs_since_last_save
+        state_dict['best'] = self.best
+
+        return state_dict
+
+    def load_state_dict(self, state_dict):
+        super().load_state_dict(state_dict)
+        self.epochs_since_last_save = state_dict['epochs']
+        self.best = state_dict['best']
+
+        return self
+
     def on_start(self, state):
-        self.best = float('inf') if self.mode == 'min' else -float('inf')
+        if self.best is None:
+            self.best = float('inf') if self.mode == 'min' else -float('inf')
 
-    def on_end_epoch(self, model_state):
-
+    def on_end_epoch(self, state):
+        super().on_end_epoch(state)
         self.epochs_since_last_save += 1
         if self.epochs_since_last_save >= self.period:
             self.epochs_since_last_save = 0
 
-            current = model_state[torchbearer.METRICS][self.monitor]
+            current = state[torchbearer.METRICS][self.monitor]
 
             if self.monitor_op(current, self.best):
                 self.best = current
-                self.save_checkpoint(model_state, overwrite_most_recent=True)
+                self.save_checkpoint(state, overwrite_most_recent=True)
 
 
 class Interval(_Checkpointer):
@@ -160,13 +186,25 @@ class Interval(_Checkpointer):
         self.period = period
         self.epochs_since_last_save = 0
 
-    def on_end_epoch(self, model_state):
-        super().on_end_training(model_state)
+    def state_dict(self):
+        state_dict = super().state_dict()
+        state_dict['epochs'] = self.epochs_since_last_save
+
+        return state_dict
+
+    def load_state_dict(self, state_dict):
+        super().load_state_dict(state_dict)
+        self.epochs_since_last_save = state_dict['epochs']
+
+        return self
+
+    def on_end_epoch(self, state):
+        super().on_end_epoch(state)
 
         self.epochs_since_last_save += 1
         if self.epochs_since_last_save >= self.period:
             self.epochs_since_last_save = 0
-            self.save_checkpoint(model_state)
+            self.save_checkpoint(state)
 
 
 

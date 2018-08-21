@@ -1,5 +1,12 @@
 """
-Model
+Trial
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+..  automodule:: torchbearer.trial
+        :members:
+        :undoc-members:
+
+Model (Deprecated)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ..  automodule:: torchbearer.torchbearer
@@ -23,5 +30,6 @@ from .version import __version__
 from .state import *
 from . import metrics
 from . import callbacks
+from .trial import *
 from .torchbearer import *
 from . import cv_utils
